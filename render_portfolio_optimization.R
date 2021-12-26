@@ -1,0 +1,1 @@
+rmarkdown::render("portfolio-optimization.Rmd")

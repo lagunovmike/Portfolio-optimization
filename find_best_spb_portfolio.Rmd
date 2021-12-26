@@ -1,0 +1,192 @@
+---
+title: "best-sbp-portfolio"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages(library(tidyquant))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(timetk))
+```
+
+
+```{r get data, cache=TRUE}
+setwd("D:/Projects/Data Science/DataScience/Portfolio-optimization")
+spb_tickers <- read.csv("data/tickers-spb.csv")
+
+spb_tickers <- spb_tickers[,2]
+spb_tickers <- gsub("@", ".", spb_tickers)
+
+price_from <- "2017-04-12"
+price_to <- "2021-04-12"
+
+price_data <- tq_get(spb_tickers,
+                     from = price_from,
+                     to = price_to,
+                     get = 'stock.prices')
+#write_csv(price_data, "prices_2015_11_25_to_2020_11_25.csv")
+price_data <- read_csv("prices_2015_11_25_to_2020_11_25.csv")
+```
+
+
+```{r get data}
+# my brocker doesn't have
+not_available <- c("CCC", "RLMD","VAR1.DE", "CYRX",
+                   "BJ", "NKLA", "ATSG", "RCII","VIRT", "UN01.DE")
+
+price_data_avilable <- price_data %>%
+    filter(!symbol %in% not_available)
+
+price_data_cheap_idx <- price_data_avilable %>%
+    group_by(symbol) %>%
+    mutate(last = last(close)) %>%
+    summarize(lastdate = max(date), 
+              lastprice = max(last), .groups = "drop") %>%
+    filter(lastprice <= 120)
+
+price_data_cheap <- price_data %>%
+    filter(symbol %in% price_data_cheap_idx$symbol)
+
+
+log_ret_tidy <- price_data_cheap %>%
+    group_by(symbol) %>%
+    tq_transmute(select = adjusted,
+                 mutate_fun = periodReturn,
+                 period = 'daily',
+                 col_rename = 'ret',
+                 type = 'log')
+
+log_ret_xts <- log_ret_tidy %>%
+        pivot_wider(names_from = symbol, values_from = ret) %>%
+        tk_xts(silent = T)
+
+many_na <- sapply(log_ret_xts, function(x){mean(is.na(x))})
+many_na_idx <- which(many_na > 0.7)
+log_ret_xts <- log_ret_xts[,-many_na_idx]
+
+trade_begin <- as.Date(sapply(log_ret_xts, function(x){index(log_ret_xts)[min(which(!is.na(x)))]}))
+
+log_ret_xts <- log_ret_xts[,-which(trade_begin > today()-years(4))]
+ncol(log_ret_xts)
+```
+
+
+```{r}
+set.seed(9)
+num_fit <- 100000000
+sharpe_ratio_fit <- 1
+sharpe_ratio_fit_best <- sharpe_ratio_fit
+cnt_tries <- 0
+cnt_info <- 0
+cnt_total <- 0
+risk_free <- 0.05
+start_fit <- Sys.time()
+
+while(cnt_tries <= num_fit){
+    cnt_tries <- cnt_tries + 1
+    cnt_info <- cnt_info + 1
+    tmp_tickers_idx <- sample(ncol(log_ret_xts), 10)
+    tmp_tickers <- names(log_ret_xts)[tmp_tickers_idx]
+    log_ret_xts_tmp <- log_ret_xts[,tmp_tickers]
+    
+    log_ret_xts_compl <- na.omit(log_ret_xts_tmp) 
+    
+    mean_ret <- colMeans(log_ret_xts_compl)
+    
+    cov_mat <- cov(log_ret_xts_compl) * 252
+    
+    
+    wts <- runif(length(tmp_tickers_idx))
+    wts <- round(wts/sum(wts),2)
+    
+    port_fit_ret <- sum(wts * mean_ret)
+    port_fit_ret <- ((port_fit_ret + 1)^252) - 1
+    
+    # Creating and storing portfolio risk
+    port_fit_sd <- sqrt(t(wts) %*% (cov_mat  %*% wts))
+    
+    
+    # Creating and storing Portfolio Sharpe Ratios
+    
+    sr <- (port_fit_ret-risk_free)/port_fit_sd
+    
+    if(sr >= 1.4){
+        from <- min(index(log_ret_xts_compl))
+        to <- max(index(log_ret_xts_compl))
+        best_tickers_comb <- tmp_tickers 
+        port_fit_returns <- round(port_fit_ret,3)
+        port_fit_risk <- round(port_fit_sd,3)
+        sharpe_ratio_fit <- round(sr,3)
+        fit_portfolio_values <- tibble(
+            Return = port_fit_returns,
+            Risk = port_fit_risk,
+            SharpeRatio = sharpe_ratio_fit)
+        
+        wts_fit <- as_tibble(rbind(wts_fit))
+        colnames(wts_fit) <- best_tickers_comb
+        fit_portfolio_values <- tk_tbl(cbind(wts_fit,
+                                             fit_portfolio_values),
+                                       preserve_index = F)
+        p <- fit_portfolio_values %>%
+            gather(names(fit_portfolio_values)[1]:names(fit_portfolio_values)[length(names(fit_portfolio_values))-3], 
+                   key = Asset,
+                   value = Weights) %>%
+            mutate(Asset = as.factor(Asset)) %>%
+            ggplot(aes(x = fct_reorder(Asset,Weights), 
+                       y = Weights, fill = Asset)) +
+            geom_bar(stat = 'identity') +
+            geom_text(aes(x = fct_reorder(Asset,Weights), y = Weights,
+                          label = Weights), 
+                      nudge_y = 0.015, color = "gray 30") +
+            theme_minimal() +
+            labs(x = 'Assets', 
+                 y = 'Weights', 
+                 title = "Current optimal portfolio",
+                 subtitle = paste("From:", from, "to", to,
+                                  "| SR:", as.numeric(sharpe_ratio_fit),
+                                  "| Return:", port_fit_returns,
+                                  "| Risk: ", port_fit_risk)) +
+            scale_y_continuous(labels = scales::percent)
+        filesave <- paste0("spb-portfolios\\portfolio","_sr",
+               gsub("\\.", "\\_", as.character(sharpe_ratio_fit)),
+               "_", cnt_total,".png")
+        ggsave(filesave,p, width=8, height=5)
+    }
+    
+    
+    if(round(sr,3) > sharpe_ratio_fit_best){
+        sharpe_ratio_fit_best <- round(sr,3)
+        cnt_tries <- 0
+        cnt_info <- 0
+        wts_fit <- wts
+
+        time_past <- round(difftime(Sys.time(), start_fit, 
+                                    units = "hours"), 2)
+        cat("\014" ,"Sharpe ratio: ",sharpe_ratio_fit_best,
+            "| Time past: ", time_past, "hours", 
+            "Num try:", cnt_total, "\r")
+        print(p)
+    }
+    if(cnt_info == 100000){
+        cnt_info <- 0
+        time_past <- round(difftime(Sys.time(), start_fit, 
+                                    units = "hours"), 2)
+        cat("\014", "Tries: ", cnt_tries/1000000, " M", 
+            "| Sharpe ratio: ", sharpe_ratio_fit_best, 
+            "| Time past: ", time_past, "hours", "\r")
+    }
+    cnt_total <- cnt_total + 1
+}
+
+
+finish_fit <- Sys.time()
+spent <- difftime(finish_fit, start_fit, units = "mins")
+spent
+
+# Converting matrix to a tibble and changing column names
+wts_fit <- as_tibble(rbind(wts_fit))
+colnames(wts_fit) <- best_tickers_comb
+
+# Combing all the values together
+fit_portfolio_values <- tk_tbl(cbind(wts_fit, fit_portfolio_values), preserve_index = F)
+```

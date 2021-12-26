@@ -1,0 +1,530 @@
+---
+title: "Portfolio Optimization"
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_file = file.path(dirname(inputFile), paste0("Reports/PortfOpt_",lubridate::today(),"_week-",lubridate::week(lubridate::today()),".html"))) })
+params:
+  date: !r Sys.Date()
+---
+
+
+```{r "libraries", echo=FALSE, results='hide', warning=FALSE,message=FALSE}
+
+report_start_time <- Sys.time()
+setwd("D:/Project/DataScience/Portfolio-optimization")
+suppressPackageStartupMessages(library(tidyquant)) # To download the data
+suppressPackageStartupMessages(library(plotly)) # To create interactive charts
+suppressPackageStartupMessages(library(timetk)) # To manipulate the data series
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(kableExtra))
+suppressPackageStartupMessages(library(PortfolioAnalytics))
+suppressPackageStartupMessages(library(ggrepel))
+options(scipen=999)
+```
+
+```{r "key variables", echo = FALSE}
+num_port <- 2000000
+num_fit <- 100000
+
+wts_have <- c("AMD" = 0.2951,
+              "NVTA" = 0.0712,
+              "TAL" = 0.1264,
+              "FRHC" = 0.4157,
+              "PLZL.ME" = 0.0902
+              )
+```
+
+```{r "proceeding", echo=FALSE, results='hide', warning=FALSE,message=FALSE}
+
+tick <- c("AMD", "NVTA",
+          "FRHC", "TAL", "NOK", "FCN", "FRPT", "APPS", "MRTX", "ZYXI", "PLZL.ME",
+          "PWR", "GSHD", "WPM")
+
+tick <- unique(tick, names(wts_have))
+
+
+price_from <- "2018-12-21"
+price_to <- "2021-12-21"
+
+price_data <- tq_get(tick,
+                     from = price_from,
+                     to = price_to,
+                     get = 'stock.prices')
+
+# convert russian assets to dollars
+
+usdrub <- tq_get("RUB=X", from = price_from,
+                 to = price_to,
+                 get = 'stock.prices')
+usdrub <- select(usdrub, date, adjusted)
+
+price_data <- price_data %>%
+    left_join(usdrub, by = "date", suffix = c(".stock", ".dollar")) %>%
+    mutate(adjusted = if_else(grepl(".ME", price_data$symbol),
+                              adjusted.stock / adjusted.dollar, 
+                              adjusted.stock)) %>%
+    select(-c(adjusted.dollar, adjusted.stock))
+
+# end converting
+
+log_ret_tidy <- price_data %>%
+    group_by(symbol) %>%
+    tq_transmute(select = adjusted,
+                 mutate_fun = periodReturn,
+                 period = 'daily',
+                 col_rename = 'ret',
+                 type = 'log')
+
+log_ret_xts <- log_ret_tidy %>%
+    pivot_wider(names_from = symbol, values_from = ret) %>%
+    tk_xts()
+
+log_ret_xts_compl <- na.omit(log_ret_xts) 
+
+
+
+cov_mat <- cov(log_ret_xts_compl) * 252
+
+#round(cor(log_ret_xts_compl),2)
+# print(round(cov_mat,4))
+
+# Creating a matrix to store the weights
+
+all_wts <- matrix(nrow = num_port,
+                  ncol = length(tick))
+
+# Creating an empty vector to store
+# Portfolio returns
+
+port_returns <- vector('numeric', length = num_port)
+
+# Creating an empty vector to store
+# Portfolio Standard deviation
+
+port_risk <- vector('numeric', length = num_port)
+
+# Creating an empty vector to store
+# Portfolio Sharpe Ratio
+
+sharpe_ratio <- vector('numeric', length = num_port)
+
+risk_free <- 0.05
+
+
+```
+
+```{r "portfolio fit", echo=FALSE, message=FALSE, warning=FALSE, results= FALSE}
+# Simulation
+
+sharpe_ratio_fit <- 0
+cnt_tries <- 0
+cnt_info <- 0
+cnt_total <- 0
+start_fit <- Sys.time()
+while (cnt_tries <= num_fit) {
+    cnt_tries <- cnt_tries + 1
+    cnt_info <- cnt_info + 1
+    wts <- runif(length(tick))
+    wts <- round(wts/sum(wts),2)
+    
+    # Storing weight in the matrix
+    #all_wts[i,] <- wts
+    
+    # Portfolio returns
+    
+    #port_fit_ret <- sum(wts * mean_ret)
+    #port_fit_ret <- ((port_fit_ret + 1)^252) - 1
+      
+    port_fit_ret <- log_ret_xts_compl %*% wts
+    port_fit_ret <- prod(port_fit_ret + 1)^(252/nrow(port_fit_ret)) - 1
+
+    # Creating and storing portfolio risk
+    port_fit_sd <- sqrt(t(wts) %*% (cov_mat  %*% wts))
+    
+    
+    # Creating and storing Portfolio Sharpe Ratios
+    # Assuming 0% Risk free rate
+    
+    sr <- (port_fit_ret-risk_free)/port_fit_sd
+    if(round(sr,3) > sharpe_ratio_fit){
+        cnt_tries <- 0
+        cnt_info <- 0
+        wts_fit <- wts
+        port_fit_returns <- round(port_fit_ret,3)
+        port_fit_risk <- round(port_fit_sd,3)
+        sharpe_ratio_fit <- round(sr,3)
+        time_past <- round(difftime(Sys.time(), start_fit, 
+                                    units = "mins"), 2)
+        message("Sharpe ratio: ",sharpe_ratio_fit,
+            " | Time past: ", time_past, " min", "\r")
+    }
+    if(cnt_info == 1000000){
+        cnt_info <- 0
+        time_past <- round(difftime(Sys.time(), start_fit, 
+                                    units = "mins"), 2)
+        message("Tries: ", cnt_tries/1000000, " M", 
+            " | Sharpe ratio: ", sharpe_ratio_fit, 
+            " | Time past: ", time_past, " min", "\r")
+        
+    }
+    cnt_total <- cnt_total + 1
+}
+finish_fit <- Sys.time()
+spent <- difftime(finish_fit, start_fit, units = "mins")
+
+# Storing the values in the table
+fit_portfolio_values <- tibble(Return = port_fit_returns,
+                           Risk = port_fit_risk,
+                           SharpeRatio = sharpe_ratio_fit)
+
+
+# Converting matrix to a tibble and changing column names
+wts_fit <- as_tibble(rbind(wts_fit))
+colnames(wts_fit) <- colnames(log_ret_xts)
+
+# Combing all the values together
+fit_portfolio_values <- tk_tbl(cbind(wts_fit, fit_portfolio_values), preserve_index = F)
+```
+
+Total fit trials : `r round(cnt_total/1000000)`M
+
+```{r "simulation", echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# Simulation
+start <- Sys.time()
+for (i in seq_along(port_returns)) {
+    
+    wts <- runif(length(tick))
+    wts <- round(wts/sum(wts),2)
+    
+    # Storing weight in the matrix
+    all_wts[i,] <- wts
+    
+    # Portfolio returns
+    
+    #port_ret <- sum(wts * mean_ret)
+    #port_ret <- ((port_ret + 1)^252) - 1
+    
+    port_ret <- log_ret_xts_compl %*% wts
+    port_ret <- prod(port_ret + 1)^(252/nrow(port_ret)) - 1
+    
+    # Storing Portfolio Returns values
+    port_returns[i] <- round(port_ret,3)
+    
+    
+    # Creating and storing portfolio risk
+    port_sd <- sqrt(t(wts) %*% (cov_mat  %*% wts))
+    port_risk[i] <- round(port_sd,3)
+    
+    # Creating and storing Portfolio Sharpe Ratios
+    # Assuming 0% Risk free rate
+    
+    sr <- (port_ret-risk_free)/port_sd
+    sharpe_ratio[i] <- round(sr,3)
+}
+finish <- Sys.time()
+spent <- difftime(finish, start, units = "mins")
+
+# Storing the values in the table
+portfolio_values <- tibble(Return = port_returns,
+                           Risk = port_risk,
+                           SharpeRatio = sharpe_ratio)
+
+
+# Converting matrix to a tibble and changing column names
+all_wts <- tk_tbl(all_wts)
+
+colnames(all_wts) <- colnames(log_ret_xts)
+
+# Combing all the values together
+portfolio_values <- tk_tbl(cbind(all_wts, portfolio_values))
+
+
+portfolio_values <- portfolio_values %>%
+    distinct(Risk, Return, .keep_all = TRUE)
+```
+
+Time spent on simulation: `r round(spent)` minutes
+
+Portfolios amount: `r as.character(num_port/1000000)`M
+
+Date range from `r min(index(log_ret_xts_compl))` to `r max(index(log_ret_xts_compl))`
+
+Risk free: `r risk_free`
+
+```{r "single asset", echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# Simulation
+
+wts_singles <- matrix(rep(0, length(tick)^2), 
+                      nrow = length(tick), ncol = length(tick))
+diag(wts_singles) <- 1
+
+port_singles_returns <- vector('numeric', length = length(tick))
+
+port_singles_risk <- vector('numeric', length = length(tick))
+
+sharpe_ratio_singles <- vector('numeric', length = length(tick))
+
+for (i in 1:length(tick)) {
+    # Portfolio returns
+    
+    #port_ret <- sum(wts_singles[i,] * mean_ret)
+    #port_ret <- ((port_ret + 1)^252) - 1
+    
+    port_ret <- log_ret_xts_compl %*% wts_singles[i,]
+    port_ret <- abs(prod(port_ret + 1))^(252/nrow(port_ret)) - 1
+    
+    
+    # Storing Portfolio Returns values
+    port_singles_returns[i] <- round(port_ret,3)
+    
+    
+    # Creating and storing portfolio risk
+    port_singles_sd <- sqrt(t(wts_singles[i,]) %*% (cov_mat  %*% wts_singles[i,]))
+    port_singles_risk[i] <- round(port_singles_sd,3)
+    
+    # Creating and storing Portfolio Sharpe Ratios
+    # Assuming 0% Risk free rate
+    
+    sr <- (port_ret-risk_free)/port_singles_sd
+    sharpe_ratio_singles[i] <- round(sr,3)
+}
+
+# Storing the values in the table
+single_portfolio_values <- tibble(Return = port_singles_returns,
+                           Risk = port_singles_risk,
+                           SharpeRatio = sharpe_ratio_singles)
+
+
+# Converting matrix to a tibble and changing column names
+wts_singles <- tk_tbl(wts_singles)
+
+colnames(wts_singles) <- colnames(log_ret_xts)
+
+# Combing all the values together
+single_portfolio_values <- tk_tbl(cbind(wts_singles, single_portfolio_values))
+
+single_portfolio_values <- single_portfolio_values %>%
+    pivot_longer(1:(ncol(single_portfolio_values)-3),
+             names_to = "Asset") %>%
+    filter(value == 1) %>%
+    select(-value)
+
+single_portfolio_values
+    
+```
+
+## My current portfolio
+
+```{r "my portfolio", echo = FALSE, warning = FALSE}
+# Calculate the random weights
+
+#wts_one <- c(0, 0.2751, 0.1958, 0.5290, rep(0,7))
+#wts_one <- c(0.4583, 0.3162, 0.2255, rep(0,8))
+
+wts_one <- rep(0, length(tick))
+names(wts_one) <- tick
+wts_one <- replace(wts_one, names(wts_have), wts_have)
+
+# Calculate the portfolio returns
+port_return_one <- log_ret_xts_compl %*% as.numeric(wts_one)
+port_return_one <- prod(port_return_one + 1)^(252/nrow(port_return_one)) - 1
+
+
+
+# Calculate the portfolio risk
+port_risk_one <- sqrt(t(as.numeric(wts_one)) %*% (cov_mat %*% as.numeric(wts_one)))
+
+# Calculate the Sharpe Ratio
+sharpe_ratio_one <- (port_return_one-risk_free)/port_risk_one
+
+portfolio_values_one <- tibble(Return = port_return_one,
+                               Risk = port_risk_one,
+                               SharpeRatio = sharpe_ratio_one)
+
+# Converting matrix to a tibble and changing column names
+wts_one <- as_tibble(rbind(wts_one))
+colnames(wts_one) <- colnames(log_ret_xts)
+
+# Combing all the values together
+portfolio_values_one <- tk_tbl(cbind(wts_one, portfolio_values_one), preserve_index = F)
+
+kbl(round(portfolio_values_one,2)) %>%
+    kable_styling()
+```
+```{r "optimized_sharpie", echo=FALSE, message=FALSE, warning=FALSE, results= FALSE}
+R <- log_ret_xts_compl
+
+funds <- colnames(R)
+
+
+# Construct initial portfolio
+init.portf <- portfolio.spec(assets=funds)
+init.portf <- add.constraint(portfolio=init.portf, type="full_investment")
+init.portf <- add.constraint(portfolio=init.portf, type="long_only")
+init.portf <- add.objective(portfolio=init.portf, type="return", name="mean")
+init.portf <- add.constraint(portfolio=init.portf, type="position_limit", max_pos=5)
+# init.portf <- add.objective(portfolio=init.portf, type="risk", name="StdDev")
+init.portf <- add.objective(portfolio=init.portf, type='risk', name='ETL',
+                            arguments=list(p=0.95))
+maxSR.lo.ROI <- optimize.portfolio(R=R, portfolio=init.portf, 
+                                   optimize_method="ROI", 
+                                   maxSR=TRUE, trace=TRUE)
+maxSRReturns <- Return.portfolio(R,weight = extractWeights(maxSR.lo.ROI), 
+                                   rebalance_on = "days")
+roi_wts <- as_tibble(t(extractWeights(maxSR.lo.ROI)))
+
+opt_sr_res <- table.AnnualizedReturns(R = maxSRReturns, Rf = 0.05/252)
+opt_sr_portfolio_values <- tibble(Return = opt_sr_res[1,],
+                           Risk = opt_sr_res[2,],
+                           SharpeRatio = opt_sr_res[3,])
+opt_sr_portfolio_values <- cbind(roi_wts, opt_sr_portfolio_values)
+kbl(round(opt_sr_portfolio_values,2)) %>%
+    kable_styling()
+```
+
+
+## Minimum Variance Portfolio Weights
+
+```{r "minimum variance portfolio", echo = FALSE, out.width='100%', warning=FALSE}
+# The minimum variance portfolio
+min_var <- portfolio_values[which.min(portfolio_values$Risk),]
+p <- min_var %>%
+    gather(names(min_var)[1]:names(min_var)[length(names(min_var))-3], 
+           key = Asset,
+           value = Weights) %>%
+    mutate(Asset = as.factor(Asset)) %>%
+    ggplot(aes(x = fct_reorder(Asset,Weights), y = Weights, fill = Asset)) +
+    geom_bar(stat = 'identity') +
+    geom_text(aes(label = round(Weights,2)), nudge_y = 0.02, size = 3.5,
+                color = "darkgray") +
+    theme_minimal() +
+    labs(x = 'Assets', y = 'Weights', title = "Minimum Variance Portfolio Weights") +
+    scale_y_continuous(labels = scales::percent) 
+
+min_var <- min_var[,order(min_var[nrow(min_var),])]
+min_var <- relocate(min_var, Return, Risk, SharpeRatio,.after = last_col())
+
+kbl(round(min_var,2)) %>%
+    kable_styling()
+
+
+ggplotly(p)
+```
+
+## Tangency Portfolio Weights
+
+```{r "tangency portfolio", echo = FALSE, out.width='100%', warning=FALSE}
+max_sr <- portfolio_values[which.max(portfolio_values$SharpeRatio),]
+
+p <- max_sr %>%
+    gather(names(max_sr)[1]:names(max_sr)[length(names(max_sr))-3], 
+           key = Asset,
+           value = Weights) %>%
+    mutate(Asset = as.factor(Asset)) %>%
+    ggplot(aes(x = fct_reorder(Asset,Weights), y = Weights, fill = Asset)) +
+    geom_bar(stat = 'identity') +
+    geom_text(aes(label = round(Weights,2)), nudge_y = 0.02, size = 3.5,
+                color = "darkgray") +
+    theme_minimal() +
+    labs(x = 'Assets', y = 'Weights', 
+         title = "Tangency Portfolio Weights") +
+    scale_y_continuous(labels = scales::percent)
+
+max_sr <- max_sr[,order(max_sr[nrow(max_sr),])]
+max_sr <- relocate(max_sr, Return, Risk, SharpeRatio,.after = last_col())
+
+kbl(round(max_sr,2)) %>%
+    kable_styling()
+ggplotly(p)
+```
+
+## Portfolio Sharpie ratio fit
+
+```{r "portfolio fit res", echo=FALSE, out.width='100%'}
+p <- fit_portfolio_values %>%
+    gather(names(fit_portfolio_values)[1]:names(fit_portfolio_values)[length(names(fit_portfolio_values))-3], 
+           key = Asset,
+           value = Weights) %>%
+    mutate(Asset = as.factor(Asset)) %>%
+    ggplot(aes(x = fct_reorder(Asset,Weights), y = Weights, fill = Asset)) +
+    geom_bar(stat = 'identity') +
+    geom_text(aes(label = round(Weights,2)), nudge_y = 0.02, size = 3.5,
+              color = "darkgray") +
+    theme_minimal() +
+    labs(x = 'Assets', y = 'Weights', 
+         title = "Fit Portfolio Weights") +
+    scale_y_continuous(labels = scales::percent)
+
+kbl(round(fit_portfolio_values,2)) %>%
+    kable_styling()
+
+ggplotly(p)
+
+```
+
+## Portfolio Optimized Shaprie ratio fit (ROI method)
+```{r "optimized_sharpie res", echo = FALSE, out.width='100%', warning=FALSE}
+kbl(round(opt_sr_portfolio_values,2)) %>%
+    kable_styling()
+
+p <- roi_wts %>%
+    gather(names(roi_wts), 
+           key = Asset,
+           value = Weights) %>%
+    filter(Weights > 0.001) %>%
+    mutate(Asset = as.factor(Asset)) %>%
+    ggplot(aes(x = fct_reorder(Asset,Weights), y = Weights, fill = Asset)) +
+    geom_bar(stat = 'identity') +
+    geom_text(aes(label = round(Weights,2)), nudge_y = 0.02, size = 3.5,
+              color = "darkgray") +
+    theme_minimal() +
+    scale_y_continuous(labels = scales::percent) +
+    labs(x = 'Assets', y = 'Weights', title = "Optimized Portfolio Weights",
+         subtitle = paste("From:", min(index(R)), "to", max(index(R)),
+                          "| SR:", round(SharpeRatio.annualized(maxSRReturns, 
+                                                                Rf = 0.05/252)[1,1],2),
+                          "| Return:", round(Return.annualized(maxSRReturns)[1,1],2),
+                          "| Risk: ", round(StdDev.annualized(maxSRReturns)[1,1],2)))
+# p <- p + theme(legend.position = "none")
+ggplotly(p)
+
+```
+
+
+```{r "efficient frontier", echo = FALSE, out.width='100%'}
+# Visualizing all the portfolios
+risk_reward_port <- data.frame(risk = as.numeric(), return = as.numeric(), 
+                               portfolio = character())
+risk_reward_port[1,] <- c(min_var$Risk, min_var$Return, "Min Var")
+risk_reward_port[2,] <- c(max_sr$Risk, max_sr$Return, "Max SR sim")
+risk_reward_port[3,] <- c(fit_portfolio_values$Risk, fit_portfolio_values$Return,
+                          "Max SR fit")
+risk_reward_port[4,] <- c(portfolio_values_one$Risk, portfolio_values_one$Return,
+                          "My portfolio")
+risk_reward_port[5,] <- c(opt_sr_portfolio_values$Risk, opt_sr_portfolio_values$Return,
+                          "SR ROI")
+risk_reward_port$risk <- as.numeric(risk_reward_port$risk)
+risk_reward_port$return <- as.numeric(risk_reward_port$return)
+risk_reward_port$portfolio <- as.factor(risk_reward_port$portfolio)
+
+p <- portfolio_values %>%
+    ggplot(aes(x = Risk, y = Return)) +
+    geom_point(alpha = 0.1, color = "gray30") +
+    theme_classic() +
+    scale_y_continuous(labels = scales::percent) +
+    scale_x_continuous(labels = scales::percent) +
+    #coord_cartesian(xlim = c(min(portfolio_values$Risk) - 0.02,
+    #                         max(portfolio_values$Risk) + 0.02),
+    #                ylim = c(min(portfolio_values$Return - 0.02),
+    #                         max(portfolio_values$Return) + 0.02)) +
+    labs(x = 'Annualized Risk',
+         y = 'Annualized Returns',
+         title = "Portfolio Optimization & Efficient Frontier") +
+    geom_point(aes(x = risk, y = return, color = portfolio), 
+               data = risk_reward_port, size = 2) +
+    geom_text_repel(aes(x = Risk, y = Return, label = Asset),
+              data = single_portfolio_values, 
+              color = "gray25", size = 3) +
+    theme(legend.position="bottom")
+p
+```
+
+Total time: `r round(difftime(Sys.time(), report_start_time, units = "secs"))` seconds
