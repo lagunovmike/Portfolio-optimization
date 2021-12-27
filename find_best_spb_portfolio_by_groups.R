@@ -20,7 +20,7 @@ setwd("D:/Project/DataScience/Portfolio-optimization")
 # spb_tickers <- read.csv("Data/ListingSecurityList.csv", sep = ";", quote = "")
 spb_tickers <- read_csv2("Data/ListingSecurityList.csv", quote = "", lazy = FALSE)
 spb_tickers <- spb_tickers %>%
-    filter(s_sec_type_name_dop == "Àêöèè",
+    filter(s_sec_type_name_dop == "ÐÐºÑ†Ð¸Ð¸",
            !s_face_value_currency %in% c("RUB", "KZT")) %>%
     select(s_RTS_code) %>%
     arrange(s_RTS_code) %>%
@@ -37,30 +37,41 @@ max_positions <- 7
 ## Data loading
 price_data <- read_csv("Data/price_data.csv", lazy = FALSE)
 
-# price_data <- tq_get(spb_tickers,
-#                      from = price_from,
-#                      to = price_to,
-#                      get = 'stock.prices')
+# price_data <- tibble()
+# for(i in 1:length(spb_tickers)){
+#     price_data_temp <- tq_get(spb_tickers[i],
+#                          from = price_from,
+#                          to = price_to,
+#                          get = 'stock.prices')
+#     price_data <- bind_rows(price_data, price_data_temp)
+#     cat("\r", "Total: ", length(spb_tickers), " | Done: " ,i, sep="")
+# }
+
 
 ## Check the latest day of the base and update if necessary
 
 if(ymd(price_to)-1 > max(price_data$date)) {
     start_timer <- now()
-    cat("Starting to update the database" )
-    price_data_new <- tq_get(
-        spb_tickers,
-        from = max(price_data$date) + 1,
-        to = price_to,
-        get = 'stock.prices'
-    )
+    cat("Updating the database \n" )
+    
+    price_data_new_temp <- tibble()
+    for(i in 1:length(spb_tickers)){
+        price_data_new_temp <- tq_get(spb_tickers[i],
+                                  from = price_from,
+                                  to = price_to,
+                                  get = 'stock.prices')
+        price_data_new <- bind_rows(price_data, price_data_temp)
+        cat("\r", "Total: ", length(spb_tickers), " | Done: " ,i, sep="")
+    }
+    
     finish_timer <- now() - start_timer
     finish_timer
+    
     write_csv(price_data_new , "Data/price_data.csv", append = TRUE)
     cat("Added days:", as.numeric(today() - 1 -  max(price_data$date)))
     price_data <- price_data %>%
         bind_rows(price_data_new) %>%
         arrange(symbol, date)
-   
 } else {
     cat("Base is up to date")
 }
