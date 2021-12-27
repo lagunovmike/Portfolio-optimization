@@ -26,13 +26,14 @@ spb_tickers <- spb_tickers %>%
     arrange(s_RTS_code) %>%
     pull()
 spb_tickers <- gsub("@", ".", spb_tickers)
+spb_tickers <- gsub(" ", "-", spb_tickers)
 
 price_from <- "2011-11-01"
-price_to <- "2021-12-26"
+price_to <- "2021-12-28"
 
 years_depth <- 3
 price_filter <- 200
-max_positions <- 7
+max_positions <- 10
 
 ## Data loading
 price_data <- read_csv("Data/price_data.csv", lazy = FALSE)
@@ -54,13 +55,13 @@ if(ymd(price_to)-1 > max(price_data$date)) {
     start_timer <- now()
     cat("Updating the database \n" )
     
-    price_data_new_temp <- tibble()
+    price_data_new <- tibble()
     for(i in 1:length(spb_tickers)){
         price_data_new_temp <- tq_get(spb_tickers[i],
                                   from = price_from,
                                   to = price_to,
                                   get = 'stock.prices')
-        price_data_new <- bind_rows(price_data, price_data_temp)
+        price_data_new <- bind_rows(price_data_new, price_data_new_temp)
         cat("\r", "Total: ", length(spb_tickers), " | Done: " ,i, sep="")
     }
     
