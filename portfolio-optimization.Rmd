@@ -21,14 +21,15 @@ options(scipen=999)
 ```
 
 ```{r "key variables", echo = FALSE}
-num_port <- 2000000
+num_port <- 200000
 num_fit <- 100000
 
-wts_have <- c("AMD" = 0.2951,
-              "NVTA" = 0.0712,
-              "TAL" = 0.1264,
-              "FRHC" = 0.4157,
-              "PLZL.ME" = 0.0902
+wts_have <- c("AMD" = 0.3088,
+              "TAL" = 0.1169,
+              "FRHC" = 0.4232,
+              "PLZL.ME" = 0.0891,
+              "KR" = 0.0219,
+              "LSCC" = 0.0398
               )
 ```
 
@@ -36,13 +37,13 @@ wts_have <- c("AMD" = 0.2951,
 
 tick <- c("AMD", "NVTA",
           "FRHC", "TAL", "NOK", "FCN", "FRPT", "APPS", "MRTX", "ZYXI", "PLZL.ME",
-          "PWR", "GSHD", "WPM")
+          "PWR", "GSHD", "WPM", "MOEX.ME")
 
-tick <- unique(tick, names(wts_have))
+tick <- unique(c(tick, names(wts_have)))
 
 
-price_from <- "2018-12-21"
-price_to <- "2021-12-21"
+price_from <- "2017-12-27"
+price_to <- "2021-12-27"
 
 price_data <- tq_get(tick,
                      from = price_from,
@@ -360,7 +361,7 @@ init.portf <- portfolio.spec(assets=funds)
 init.portf <- add.constraint(portfolio=init.portf, type="full_investment")
 init.portf <- add.constraint(portfolio=init.portf, type="long_only")
 init.portf <- add.objective(portfolio=init.portf, type="return", name="mean")
-init.portf <- add.constraint(portfolio=init.portf, type="position_limit", max_pos=5)
+init.portf <- add.constraint(portfolio=init.portf, type="position_limit", max_pos=7)
 # init.portf <- add.objective(portfolio=init.portf, type="risk", name="StdDev")
 init.portf <- add.objective(portfolio=init.portf, type='risk', name='ETL',
                             arguments=list(p=0.95))
