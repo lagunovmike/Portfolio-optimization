@@ -7,8 +7,11 @@ Welcome to the Portfolio Optimization repository! This project is designed to pr
 To use this project, you will need R and the following packages:
 
 - tidyverse
+- tidyquant
 - PerformanceAnalytics
-- randomForest
+- timetk
+- plotly
+
 
 ## Getting Started
 
