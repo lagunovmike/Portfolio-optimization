@@ -52,6 +52,8 @@ Check out the output report from the script [here](https://lagunovmike.github.io
 
 `optimize assets allocation.R` script is using the lpSolve library to perform linear programming to find the optimal allocation of assets given certain constraints. The objective of the optimization is to maximize the return on investment, and the decision variables are the quantities of each asset to be purchased. The code sets up the constraints for the optimization, including the budget for the investment and the maximum allowed allocation for each asset. The optimization is then performed using the lp function, and the optimal asset quantities and the maximum return on investment are obtained as the solution. The code also calculates the proportion of the budget allocated to each asset. This file continues the analysis started in `find_best_spb_portfolio_by_groups.R` and uses the output of that file as the input for the analysis.
 
+`backtesting.R` provides a performance test using historical data and compares allocated portfolio with the SP500 index.
+
 ## Customization
 
 You can customize the optimization process by modifying the functions in portfolio_optimization.R. This script provides a set of functions for loading data, calculating statistics, and optimizing portfolios.
