@@ -10,7 +10,6 @@ editor_options:
   chunk_output_type: console
 ---
 
-
 ```{r "libraries", echo=FALSE, results='hide', warning=FALSE,message=FALSE}
 
 report_start_time <- Sys.time()
@@ -33,26 +32,23 @@ options(scipen=999)
 num_port <- 200000
 num_fit <- 100000
 
-wts_have <- c("AMD" = 0.3088,
-              "TAL" = 0.1169,
-              "FRHC" = 0.4232,
-              "PLZL.ME" = 0.0891,
-              "KR" = 0.0219,
-              "LSCC" = 0.0398
+wts_have <- c("TSLA" = 0.3088,
+              "NVDA" = 0.1169,
+              "AMZN" = 0.4232,
+              "META" = 0.0891,
+              "GOOGL" = 0.0219,
+              "PYPL" = 0.0398
               )
+
+price_from <- "2018-05-2"
+price_to <- "2023-05-01"
 ```
 
 ```{r "pre-processing", echo=FALSE, results='hide', warning=FALSE,message=FALSE}
 
-tick <- c("AMD", "NVTA",
-          "FRHC", "TAL", "NOK", "FCN", "APPS", "MRTX", "PLZL.ME",
-          "PWR", "MOEX.ME", "LSCC", "KR")
+tick <- c("AMD", "TSLA", "NVDA", "META", "AMZN", "GOOGL", "PYPL", "AAPL")
 
 tick <- unique(c(tick, names(wts_have)))
-
-
-price_from <- "2018-05-2"
-price_to <- "2023-05-01"
 
 price_data <- tq_get(tick,
                      from = price_from,
@@ -193,7 +189,6 @@ colnames(wts_fit) <- colnames(log_ret_xts)
 # Combing all the values together
 fit_portfolio_values <- tk_tbl(cbind(wts_fit, fit_portfolio_values), preserve_index = F)
 ```
-
 
 ```{r "simulation", echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
 # Simulation
@@ -350,11 +345,14 @@ colnames(wts_one) <- colnames(log_ret_xts)
 
 # Combing all the values together
 portfolio_values_one <- tk_tbl(cbind(wts_one, portfolio_values_one), preserve_index = F) %>%
-    select(sort(names(.)))
+    select(sort(names(.))) %>%
+    relocate(Return, Risk, SharpeRatio, 
+             .after = last_col())
 
 kbl(round(portfolio_values_one,2)) %>%
     kable_styling()
 ```
+
 ```{r "optimized_sharpie", echo=FALSE, message=FALSE, warning=FALSE, results= FALSE}
 R <- log_ret_xts_compl
 
@@ -388,7 +386,6 @@ opt_sr_portfolio_values <- cbind(roi_wts, opt_sr_portfolio_values)
 kbl(round(opt_sr_portfolio_values,2)) %>%
     kable_styling()
 ```
-
 
 ## Minimum Variance Portfolio Weights
 
@@ -475,14 +472,28 @@ p <- fit_portfolio_values %>%
          title = "Fit Portfolio Weights") +
     scale_y_continuous(labels = scales::percent)
 
+
 kbl(round(fit_portfolio_values,2)) %>%
     kable_styling()
+
+# fit_portfolio_assets <- fit_portfolio_values %>%
+#     select(-c(Return, Risk, SharpeRatio))
+# 
+# kbl(round(fit_portfolio_assets,2)) %>%
+#     kable_styling()
+# 
+# fit_portfolio_performance <- fit_portfolio_values %>%
+#     select(Return, Risk, SharpeRatio)
+# 
+# kbl(round(fit_portfolio_performance,2)) %>%
+#     kable_styling()
 
 ggplotly(p)
 
 ```
 
 ## Portfolio Optimized Shaprie ratio fit (ROI method)
+
 ```{r "optimized_sharpie res", echo = FALSE, out.width='100%', warning=FALSE}
 kbl(round(opt_sr_portfolio_values,2)) %>%
     kable_styling()
@@ -510,7 +521,6 @@ p <- roi_wts %>%
 ggplotly(p)
 
 ```
-
 
 ```{r "efficient frontier", echo=FALSE, fig.width=6, fig.height=4, dpi=300, out.width='100%'}
 # Visualizing all the portfolios
