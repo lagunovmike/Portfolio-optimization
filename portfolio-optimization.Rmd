@@ -42,7 +42,7 @@ wts_have <- c("AMD" = 0.3088,
               )
 ```
 
-```{r "proceeding", echo=FALSE, results='hide', warning=FALSE,message=FALSE}
+```{r "pre-processing", echo=FALSE, results='hide', warning=FALSE,message=FALSE}
 
 tick <- c("AMD", "NVTA",
           "FRHC", "TAL", "NOK", "FCN", "APPS", "MRTX", "PLZL.ME",
@@ -194,7 +194,6 @@ colnames(wts_fit) <- colnames(log_ret_xts)
 fit_portfolio_values <- tk_tbl(cbind(wts_fit, fit_portfolio_values), preserve_index = F)
 ```
 
-Total fit trials : `r round(cnt_total/1000000)`M
 
 ```{r "simulation", echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
 # Simulation
@@ -251,13 +250,9 @@ portfolio_values <- portfolio_values %>%
     distinct(Risk, Return, .keep_all = TRUE)
 ```
 
-Time spent on simulation: `r round(spent)` minutes
-
-Portfolios amount: `r as.character(num_port/1000000)`M
-
 Date range from `r min(index(log_ret_xts_compl))` to `r max(index(log_ret_xts_compl))`
 
-Risk free: `r risk_free`
+Risk free rate: `r risk_free`
 
 ```{r "single asset", echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
 # Simulation
@@ -444,7 +439,7 @@ p <- max_sr %>%
     geom_text(aes(label = round(Weights,2)), nudge_y = 0.02, size = 3.5,
                 color = "darkgray") +
     theme_minimal() +
-    theme(legend.position = 'none')
+    theme(legend.position = 'none') +
     labs(x = 'Assets', y = 'Weights', 
          title = "Tangency Portfolio Weights") +
     scale_y_continuous(labels = scales::percent)
@@ -475,7 +470,7 @@ p <- fit_portfolio_values %>%
     geom_text(aes(label = round(Weights,2)), nudge_y = 0.02, size = 3.5,
               color = "darkgray") +
     theme_minimal() +
-    theme(legend.position = "none")
+    theme(legend.position = "none") +
     labs(x = 'Assets', y = 'Weights', 
          title = "Fit Portfolio Weights") +
     scale_y_continuous(labels = scales::percent)
@@ -517,7 +512,7 @@ ggplotly(p)
 ```
 
 
-```{r "efficient frontier", echo = FALSE, out.width='100%', dpi=150}
+```{r "efficient frontier", echo=FALSE, fig.width=6, fig.height=4, dpi=300, out.width='100%'}
 # Visualizing all the portfolios
 risk_reward_port <- data.frame(risk = as.numeric(), return = as.numeric(), 
                                portfolio = character())
@@ -535,7 +530,7 @@ risk_reward_port$portfolio <- as.factor(risk_reward_port$portfolio)
 
 p <- portfolio_values %>%
     ggplot(aes(x = Risk, y = Return)) +
-    geom_point(alpha = 0.1, color = "gray30") +
+    geom_point(alpha = 0.1, color = "gray60") +
     theme_classic() +
     scale_y_continuous(labels = scales::percent) +
     scale_x_continuous(labels = scales::percent) +
