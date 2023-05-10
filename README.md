@@ -46,7 +46,7 @@ An exampmle of the allocation with the optimal Sharpie ratio:
 ![Screenshot 2023-01-30 at 20 08 35](https://user-images.githubusercontent.com/64577392/215546250-e306a8fe-7d1d-4ebe-993c-512058e9fb5d.png)
 
 
-Check out the output report from the script [here](https://lagunovmike.github.io/Portfolio-optimization/portfolio-optimization-demo.html)
+Check out the demo output report from the script [here](https://lagunovmike.github.io/Portfolio-optimization/Reports/PortfOpt_2023-05-10_week-19.html)
 
 `find_best_spb_portfolio_by_groups.R` is a script that aims to find the optimal portfolio from a list of tickers from the SPB exchange. To improve computational efficiency, the analysis is divided into two steps. The first step is to identify a wide range of strong performing stocks, and the second step is to find the optimal allocation of these stocks in a portfolio.
 
