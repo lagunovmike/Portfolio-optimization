@@ -3,13 +3,18 @@ title: "Portfolio Optimization"
 knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_file = file.path(dirname(inputFile), paste0("Reports/PortfOpt_",lubridate::today(),"_week-",lubridate::week(lubridate::today()),".html"))) })
 params:
   date: !r Sys.Date()
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+editor_options: 
+  chunk_output_type: console
 ---
 
 
 ```{r "libraries", echo=FALSE, results='hide', warning=FALSE,message=FALSE}
 
 report_start_time <- Sys.time()
-setwd("D:/Project/DataScience/Portfolio-optimization")
+setwd(".")
 suppressPackageStartupMessages(library(tidyquant)) # To download the data
 suppressPackageStartupMessages(library(plotly)) # To create interactive charts
 suppressPackageStartupMessages(library(timetk)) # To manipulate the data series
@@ -17,6 +22,10 @@ suppressPackageStartupMessages(library(tidyverse))
 suppressPackageStartupMessages(library(kableExtra))
 suppressPackageStartupMessages(library(PortfolioAnalytics))
 suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(ROI))
+suppressPackageStartupMessages(library(ROI.plugin.glpk))
+suppressPackageStartupMessages(library(ROI.plugin.quadprog))
+suppressPackageStartupMessages(library(prettydoc))
 options(scipen=999)
 ```
 
@@ -36,14 +45,14 @@ wts_have <- c("AMD" = 0.3088,
 ```{r "proceeding", echo=FALSE, results='hide', warning=FALSE,message=FALSE}
 
 tick <- c("AMD", "NVTA",
-          "FRHC", "TAL", "NOK", "FCN", "FRPT", "APPS", "MRTX", "ZYXI", "PLZL.ME",
-          "PWR", "GSHD", "WPM", "MOEX.ME")
+          "FRHC", "TAL", "NOK", "FCN", "APPS", "MRTX", "PLZL.ME",
+          "PWR", "MOEX.ME", "LSCC", "KR")
 
 tick <- unique(c(tick, names(wts_have)))
 
 
-price_from <- "2017-12-27"
-price_to <- "2021-12-27"
+price_from <- "2018-05-2"
+price_to <- "2023-05-01"
 
 price_data <- tq_get(tick,
                      from = price_from,
@@ -345,7 +354,8 @@ wts_one <- as_tibble(rbind(wts_one))
 colnames(wts_one) <- colnames(log_ret_xts)
 
 # Combing all the values together
-portfolio_values_one <- tk_tbl(cbind(wts_one, portfolio_values_one), preserve_index = F)
+portfolio_values_one <- tk_tbl(cbind(wts_one, portfolio_values_one), preserve_index = F) %>%
+    select(sort(names(.)))
 
 kbl(round(portfolio_values_one,2)) %>%
     kable_styling()
@@ -370,13 +380,16 @@ maxSR.lo.ROI <- optimize.portfolio(R=R, portfolio=init.portf,
                                    maxSR=TRUE, trace=TRUE)
 maxSRReturns <- Return.portfolio(R,weight = extractWeights(maxSR.lo.ROI), 
                                    rebalance_on = "days")
-roi_wts <- as_tibble(t(extractWeights(maxSR.lo.ROI)))
+roi_wts <- as_tibble(t(extractWeights(maxSR.lo.ROI))) %>%
+    select(sort(names(.)))
 
 opt_sr_res <- table.AnnualizedReturns(R = maxSRReturns, Rf = 0.05/252)
 opt_sr_portfolio_values <- tibble(Return = opt_sr_res[1,],
                            Risk = opt_sr_res[2,],
                            SharpeRatio = opt_sr_res[3,])
 opt_sr_portfolio_values <- cbind(roi_wts, opt_sr_portfolio_values)
+
+
 kbl(round(opt_sr_portfolio_values,2)) %>%
     kable_styling()
 ```
@@ -397,15 +410,20 @@ p <- min_var %>%
     geom_text(aes(label = round(Weights,2)), nudge_y = 0.02, size = 3.5,
                 color = "darkgray") +
     theme_minimal() +
+    theme(legend.position = 'none') +
     labs(x = 'Assets', y = 'Weights', title = "Minimum Variance Portfolio Weights") +
-    scale_y_continuous(labels = scales::percent) 
+    scale_y_continuous(labels = scales::percent)
 
-min_var <- min_var[,order(min_var[nrow(min_var),])]
-min_var <- relocate(min_var, Return, Risk, SharpeRatio,.after = last_col())
+# min_var <- min_var[,order(min_var[nrow(min_var),])]
+
+
+min_var <- min_var %>%
+    select(sort(names(.))) %>%
+    relocate(Return, Risk, SharpeRatio, 
+             .after = last_col())
 
 kbl(round(min_var,2)) %>%
     kable_styling()
-
 
 ggplotly(p)
 ```
@@ -420,17 +438,23 @@ p <- max_sr %>%
            key = Asset,
            value = Weights) %>%
     mutate(Asset = as.factor(Asset)) %>%
+    filter(Weights >= 0.001) %>%
     ggplot(aes(x = fct_reorder(Asset,Weights), y = Weights, fill = Asset)) +
     geom_bar(stat = 'identity') +
     geom_text(aes(label = round(Weights,2)), nudge_y = 0.02, size = 3.5,
                 color = "darkgray") +
     theme_minimal() +
+    theme(legend.position = 'none')
     labs(x = 'Assets', y = 'Weights', 
          title = "Tangency Portfolio Weights") +
     scale_y_continuous(labels = scales::percent)
 
-max_sr <- max_sr[,order(max_sr[nrow(max_sr),])]
-max_sr <- relocate(max_sr, Return, Risk, SharpeRatio,.after = last_col())
+# max_sr <- max_sr[,order(max_sr[nrow(max_sr),])]
+# max_sr <- relocate(max_sr, Return, Risk, SharpeRatio,.after = last_col())
+
+max_sr <- max_sr %>%
+    select(sort(names(.))) %>%
+    relocate(Return, Risk, SharpeRatio,.after = last_col())
 
 kbl(round(max_sr,2)) %>%
     kable_styling()
@@ -445,11 +469,13 @@ p <- fit_portfolio_values %>%
            key = Asset,
            value = Weights) %>%
     mutate(Asset = as.factor(Asset)) %>%
+    filter(Weights > 0.001) %>%
     ggplot(aes(x = fct_reorder(Asset,Weights), y = Weights, fill = Asset)) +
     geom_bar(stat = 'identity') +
     geom_text(aes(label = round(Weights,2)), nudge_y = 0.02, size = 3.5,
               color = "darkgray") +
     theme_minimal() +
+    theme(legend.position = "none")
     labs(x = 'Assets', y = 'Weights', 
          title = "Fit Portfolio Weights") +
     scale_y_continuous(labels = scales::percent)
@@ -477,6 +503,7 @@ p <- roi_wts %>%
     geom_text(aes(label = round(Weights,2)), nudge_y = 0.02, size = 3.5,
               color = "darkgray") +
     theme_minimal() +
+    theme(legend.position = "none") +
     scale_y_continuous(labels = scales::percent) +
     labs(x = 'Assets', y = 'Weights', title = "Optimized Portfolio Weights",
          subtitle = paste("From:", min(index(R)), "to", max(index(R)),
@@ -490,7 +517,7 @@ ggplotly(p)
 ```
 
 
-```{r "efficient frontier", echo = FALSE, out.width='100%'}
+```{r "efficient frontier", echo = FALSE, out.width='100%', dpi=150}
 # Visualizing all the portfolios
 risk_reward_port <- data.frame(risk = as.numeric(), return = as.numeric(), 
                                portfolio = character())
@@ -523,8 +550,8 @@ p <- portfolio_values %>%
                data = risk_reward_port, size = 2) +
     geom_text_repel(aes(x = Risk, y = Return, label = Asset),
               data = single_portfolio_values, 
-              color = "gray25", size = 3) +
-    theme(legend.position="bottom")
+              color = "darkblue", size = 3) +
+    theme(legend.position="right")
 p
 ```
 

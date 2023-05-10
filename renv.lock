@@ -132,6 +132,46 @@
       ],
       "Hash": "45f0398006e83a5b10b72a90663d8d8c"
     },
+    "ROI": {
+      "Package": "ROI",
+      "Version": "1.0-1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "checkmate",
+        "methods",
+        "registry",
+        "slam",
+        "utils"
+      ],
+      "Hash": "42ce9ee4c1cf168869f4386d2cdeadd2"
+    },
+    "ROI.plugin.glpk": {
+      "Package": "ROI.plugin.glpk",
+      "Version": "1.0-0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "ROI",
+        "Rglpk",
+        "methods"
+      ],
+      "Hash": "b13d1b61260f4c843aa569c2c9711c4e"
+    },
+    "ROI.plugin.quadprog": {
+      "Package": "ROI.plugin.quadprog",
+      "Version": "1.0-0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "ROI",
+        "methods",
+        "quadprog",
+        "slam"
+      ],
+      "Hash": "bb57ea6a5f0460d2f4495646dbbfed98"
+    },
     "RSelenium": {
       "Package": "RSelenium",
       "Version": "1.7.9",
@@ -182,6 +222,16 @@
         "Rcpp"
       ],
       "Hash": "84a03997fbb5acfb3c9b43bad88fea1f"
+    },
+    "Rglpk": {
+      "Package": "Rglpk",
+      "Version": "0.6-5",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "slam"
+      ],
+      "Hash": "5190f2200c77e13f66b26b6db549ba08"
     },
     "Rttf2pt1": {
       "Package": "Rttf2pt1",
@@ -436,6 +486,18 @@
         "tibble"
       ],
       "Hash": "f61dbaec772ccd2e17705c1e872e9e7c"
+    },
+    "checkmate": {
+      "Package": "checkmate",
+      "Version": "2.2.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "backports",
+        "utils"
+      ],
+      "Hash": "ca9c113196136f4a9ca9ce6079c2c99e"
     },
     "class": {
       "Package": "class",
@@ -1769,6 +1831,16 @@
       ],
       "Hash": "3781cf6971c6467fa842a63725bbee9e"
     },
+    "prettydoc": {
+      "Package": "prettydoc",
+      "Version": "0.4.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "rmarkdown"
+      ],
+      "Hash": "c20a905f41b50770438ac4727649546f"
+    },
     "prettyunits": {
       "Package": "prettyunits",
       "Version": "1.1.1",
@@ -1991,6 +2063,17 @@
         "withr"
       ],
       "Hash": "eb53ffc9674dc9a52c3a7e22d96d3f56"
+    },
+    "registry": {
+      "Package": "registry",
+      "Version": "0.5-1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "utils"
+      ],
+      "Hash": "1c9935f4f14c6c096c9c9072ddee59f1"
     },
     "rematch": {
       "Package": "rematch",
@@ -2260,6 +2343,17 @@
         "xtable"
       ],
       "Hash": "c2eae3d8c670fa9dfa35a12066f4a1d5"
+    },
+    "slam": {
+      "Package": "slam",
+      "Version": "0.1-50",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "stats"
+      ],
+      "Hash": "e25793551cbdb843154152e5ee88cbd6"
     },
     "slider": {
       "Package": "slider",
